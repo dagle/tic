@@ -13,9 +13,9 @@ struct curl_result {
 	int pos;
 };
 
-char *fectch(CURL *chandle, twitch_entry *entry);
+int fectch(CURL *chandle, twitch_entry *entry);
 void download(CURL *chandle, const char *file, const char *url);
-void update_all(CURL *chandle, twitch_list *list);
+int update_all(CURL *chandle, twitch_list *list);
 char *get_path(char *str);
 
 twitch_list *list_new(char *name);

@@ -21,7 +21,6 @@ GtkWidget *menu;
 GtkStatusIcon *status_icon;
 GtkWidget *popup = NULL;
 static gboolean updated = 1;
-static GtkWidget *vbox;
 twitch_list *tlist;
 
 static GtkWidget* popup_menu_new(void);
@@ -86,9 +85,8 @@ void show_entry(GtkWidget *vbox, twitch_entry *entry) {
 	gtk_paned_add2(GTK_PANED(entry_paned), GTK_WIDGET(entry_box));
 	gtk_container_add(GTK_CONTAINER(entry_box), entry_name);
 	gtk_container_add(GTK_CONTAINER(entry_box), entry_title);
-	//gtk_container_add(container, entry_paned);
+	//gtk_container_add(GTK_CONTAINER(vbox), entry_paned);
 	gtk_box_pack_start(GTK_BOX(vbox), entry_paned, TRUE, TRUE, 0);
-	// we need to pack this shit
 }
 
 GtkWidget *new_popup_window(int items) {
@@ -98,25 +96,62 @@ GtkWidget *new_popup_window(int items) {
 	popup = gtk_window_new(GTK_WINDOW_POPUP);
 	gtk_container_set_border_width(GTK_CONTAINER(popup), 10);
 	// default size should 1, either 1 streamer or displaying "no streams".
-	gtk_window_set_default_size(GTK_WINDOW(popup), 220, 50*items);
+	gtk_window_set_default_size(GTK_WINDOW(popup), 220, 65*items);
+	//gtk_window_set_resizable(GTK_WINDOW(popup), FALSE);
 	gtk_window_set_position(GTK_WINDOW(popup), GTK_WIN_POS_CENTER);
 	gtk_widget_override_background_color(GTK_WIDGET(popup), GTK_STATE_FLAG_NORMAL, &rgba);
 	return popup;
 }
 
 // lets leave it like this for the moment
-void window_populate(GtkContainer *container) {
+void window_populate(GtkContainer *container, int reverse) {
 	twitch_list *tmp;
-		vbox = gtk_box_new(TRUE, 1);
-		for(tmp = tlist; tmp != NULL; tmp = tmp->next) {
-			if(tmp->entry->stream)
+	GtkWidget *vbox;
+	GtkWidget *scrolled;
+
+	scrolled = gtk_scrolled_window_new (NULL, NULL);
+	//gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_NEVER);
+
+	vbox = gtk_box_new(TRUE, 1);
+	if(reverse) {
+		for(tmp = tlist; tmp != NULL; tmp = tmp->next);
+		for(; tmp != NULL; tmp = tmp->prev) {
+			if(tmp->entry->stream) {
 				show_entry(vbox, tmp->entry);
+			}
 		}
-		gtk_container_add(GTK_CONTAINER(container), vbox);
-		gtk_widget_show_all(vbox);
+	} else {
+		for(tmp = tlist; tmp != NULL; tmp = tmp->next) {
+			if(tmp->entry->stream) {
+				show_entry(vbox, tmp->entry);
+			}
+		}
+	}
+	gtk_container_add(GTK_CONTAINER(container), scrolled);
+	gtk_container_add(GTK_CONTAINER(scrolled), vbox);
+	gtk_viewport_set_shadow_type(GTK_VIEWPORT(gtk_bin_get_child(GTK_BIN((scrolled)))), 
+											GTK_SHADOW_NONE);
 }
 
 void announce(twitch_entry *entry) {
+}
+
+int hide_popup(void *data) {
+	GtkWidget *widget = (GtkWidget *)data;
+	gtk_widget_destroy(GTK_WIDGET(widget));
+	return TRUE;
+}
+
+void create_notification(int items, int native) {
+	GtkWidget *timed;
+	int id;
+	timed = new_popup_window(items);
+	window_move_absolute(popup, 0, 0);
+	window_populate(GTK_CONTAINER(timed), 0);
+
+	gtk_window_present(GTK_WINDOW(timed));
+	gtk_widget_show_all(GTK_WIDGET(timed));
+	id = g_timeout_add(1500, hide_popup, timed);
 }
 
 void window_move(GtkWidget *win, GtkStatusIcon *status_icon, GdkEventButton *event) {
@@ -137,8 +172,29 @@ void window_move(GtkWidget *win, GtkStatusIcon *status_icon, GdkEventButton *eve
 			y = area.y + area.height;
 
 	}
-	gtk_window_move(GTK_WINDOW(popup), x ,y);
-	gtk_window_present(GTK_WINDOW(popup));
+	gtk_window_move(GTK_WINDOW(win), x ,y);
+}
+
+void window_move_absolute(GtkWidget *win, int top, int left) {
+	int x, y;
+	int wx, wy;
+	int posx, posy;
+	gtk_window_get_size(GTK_WINDOW(popup), &wx, &wy);
+	GdkScreen * screen = gdk_screen_get_default();
+	x = gdk_screen_get_width(screen);
+	y = gdk_screen_get_height(screen);
+	if(left) {
+		posx = 0;
+	} else {
+		posx = x-wx;
+	}
+	if(top) {
+		posy = 15;
+	} else {
+		posy = y - 15;
+	}
+
+	gtk_window_move(GTK_WINDOW(win), posx, posy);
 }
 
 static gboolean icon_press(GtkStatusIcon *status_icon, GdkEventButton *event, void *data){
@@ -159,9 +215,12 @@ static gboolean icon_press(GtkStatusIcon *status_icon, GdkEventButton *event, vo
 			gtk_widget_destroy(GTK_WIDGET(popup));
 		i = list_online(tlist);
 		popup = new_popup_window(i);
-		window_populate(GTK_CONTAINER(popup));
-
 		window_move(popup, status_icon, event);
+		//window_move_absolute(popup);
+		window_populate(GTK_CONTAINER(popup), 0);
+
+		gtk_window_present(GTK_WINDOW(popup));
+		gtk_widget_show_all(GTK_WIDGET(popup));
 
 		//updated = FALSE;
 		return TRUE;
@@ -236,21 +295,13 @@ static gboolean update_worker(void *data) {
 	return TRUE;
 }
 
-void print_stream(stream *stream) {
-	if(stream) 
-		printf("id: %d\ngame: %s\nviewers: %d\n", stream->id, stream->game, stream->viewers);
-}
-
-void print_entry(twitch_entry *entry) {
-	printf("name: %s\nself: %s\nchannel: %s \nself: {\n", entry->name, entry->self, entry->channel);
-	print_stream(entry->stream);
-	printf("}\n");
-}
 int main(int argc, char *argv[]){
 	chandle = curl_easy_init();
 	gtk_init(&argc, &argv);
-	tlist = list_new("SynergyLeague");
-	tlist = list_push(tlist, "drayswe");
+	tlist = list_new("Twoeasy");
+	tlist = list_push(tlist, "khezzu");
+	tlist = list_push(tlist, "TaKeTVRed");
+	tlist = list_push(tlist, "WagamamaTV");
 	update_all(chandle, tlist);
 
 	menu = popup_menu_new();

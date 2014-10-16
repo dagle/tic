@@ -8,13 +8,14 @@
 #include "io.h"
 
 #define BUFFER_SIZE  (256 * 4096)
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
 
 size_t curl_write(void *buf, size_t size, size_t nmemb, void *data);
 
 static struct curl_slist *headers = NULL;
 
 // returns 0 if the stream haven't changed, 1 if it had and -1 on error.
-char *fetch(CURL *chandle, twitch_entry *entry) {
+int fetch(CURL *chandle, twitch_entry *entry) {
 	static char buf[256];
 	char *data;
 	int status, code;
@@ -38,17 +39,17 @@ char *fetch(CURL *chandle, twitch_entry *entry) {
 	status = curl_easy_perform(chandle);
 
 	if(status != 0) {
-		return NULL;
+		return -1;
 	}
 
 	curl_easy_getinfo(chandle, CURLINFO_RESPONSE_CODE, &code);
 	if(code != 200) {
-		return NULL;
+		return -1;
 	}
 	data[result.pos] = '\0';
 	update_entry(entry, data);
 	free(data);
-	return data;
+	return 0;
 }
 
 size_t curl_write(void *buf, size_t size, size_t nmemb, void *data) {
@@ -126,10 +127,12 @@ char *get_path(char *path) {
 }
 #endif
 
-void update_all(CURL *chandle, twitch_list *list) {
+int update_all(CURL *chandle, twitch_list *list) {
+	int update = 0;
 	for(; list; list = list->next) {
-		fetch(chandle, list->entry);
+		update = MAX(fetch(chandle, list->entry), update);
 	}
+	return update;
 }
 
 int length(twitch_list *list) {
