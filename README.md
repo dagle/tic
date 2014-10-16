@@ -23,3 +23,5 @@ Because I haven't updated the buildsystem for your plattform
 and I can't currently build it. The reason for that is that
 tic it's not ready for usage or not ready for that pattform.
 
+Since a screenshot can say more than 100 words (look in the opper courner):
+![picture of tic in action](http://alephnull.se/software/tic-scrot.png)
